@@ -1,0 +1,96 @@
+How to Configure the GCP Backend for Terraform
+For simple test scripts or for development, a local state file will work.
+However, if we are working in a team, deploying our infrastructure from a CI/CD tool or developing a Terraform using multiple layers, we need to store the state file in a remote backend and lock the file to avoid mistakes or damage the existing infrastructure.
+We can use remote backends, such as Azure Storage, Google Cloud Storage, Amazon S3, and HashiCorp Terraform Cloud & Terraform Enterprise, to keep our files safe and share between multiple users.
+In this story, we will learn:
+How to Create a Google Storage Bucket for Remote Backend using Terraform
+How to Configure a GCP Backend for Terraform
+1. Prerequisites
+We will have a few requirements to create your GCP backend using Terraform.
+1.1. GCP Service Account
+We will need a GCP Service Account with Storage Admin (roles/storage.admin) permissions and the JSON file of the Service Account.
+Follow instructions on this story if you need help → How to Create a Service Account for Terraform in GCP (Google Cloud Platform)
+1.2. Cloud Storage API enabled
+Also, we will need the Google Cloud Storage API enabled. Instructions to enable it, are below.
+We select our root project, type Cloud Storage API on the search box and select Cloud Storage API
+
+If the API is disabled, we click on the ENABLE button to enable it.
+2. How to Create a Google Storage Bucket for Remote Backend using Terraform
+First, we create the file variables.tf, and add the following code:
+# define GCP region
+variable "gcp_region" {
+  type        = string
+  description = "GCP region"
+}
+# define GCP project name
+variable "gcp_project" {
+  type        = string
+  description = "GCP project name"
+}
+# GCP authentication file
+variable "gcp_auth_file" {
+  type        = string
+  description = "GCP authentication file"
+}
+variable "bucket-name" {
+  type        = string
+  description = "The name of the Google Storage Bucket to create"
+}
+variable "storage-class" {
+  type        = string
+  description = "The storage class of the Storage Bucket to create"
+}
+Then, we create the provider.tf file and add the following content:
+terraform {
+  required_version = ">= 0.12"
+}
+provider "google" {
+  credentials = file(var.gcp_auth_file)
+  project     = var.gcp_project
+  region      = var.gcp_region
+}
+After that, we create the main.tf file:
+# Create a GCS Bucket
+resource "google_storage_bucket" "tf-bucket" {
+  project       = var.gcp_project
+  name          = var.bucket-name
+  location      = var.gcp_region
+  force_destroy = true
+  storage_class = var.storage-class
+  versioning {
+    enabled = true
+  }
+}
+Finally, we define our variables in the terraform.tfvars file:
+# GCP Settings
+gcp_project = "garden-green-456813"
+gcp_region  = "europe-west4"
+gcp_auth_file = "../auth/garden-green-456813-8fa36bbabd8c.json"
+# Bucket
+bucket-name   = "kopicloud-global-gsb" 
+storage-class = "REGIONAL"
+3. How to Configure a GCP Backend for Terraform
+Below are examples of how to use GCP backend in Terraform.
+3.1. Using Remote Backend for Local Deployment
+Below is an example of using the backend for local deployment, usually this is for development or testing. We need to have the JSON credential file in our root Terraform folder.
+terraform {
+  backend "gcs" {
+    bucket      = "kopicloud-global-gsb"
+    prefix      = "root\network-tfsate"
+    credentials = "garden-green-456813-8fa36bbabd8c.json"
+  }
+}
+3.2. Using Remote Backend for CI/CD Tools
+If we are planning to use a CI/CD such as Azure DevOps, we need to configure the backend like this:
+terraform {
+  backend "gcs" {
+  }
+}
+3.3. Using Remote Backend with Partial Configuration
+If we want to use partial configuration -the ability to pass credentials from the command line-, which is a very useful feature for DevOps tools or scripts, we need to configure the backend like this:
+terraform {
+  backend "gcs" {
+  }
+}
+Then, we can pass the credentials from the command line like this:
+terraform init -backend-config="kopicloud-global-gsb" -backend-config="root\network-tfsate" -backend-config="garden-green-456813-8fa36bbabd8c.json"
